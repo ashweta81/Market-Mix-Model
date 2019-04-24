@@ -1,0 +1,314 @@
+---
+title: "MarketMix"
+author: "Shweta Tyagi"
+date: "24/04/2019"
+output:  rmarkdown::github_document
+---
+
+```{r}
+
+## Load data in R and understand its contents. Rearrange the columns for ease of view and understanding
+volmart<- read.csv(file.choose(), header=TRUE)
+str(volmart)
+volmart<-volmart[,c(1,2,10,3,11,4,19,5,13,6,7,14,23,24,8,9,15,16,22,12,18,17,20,21)]
+str(volmart)  
+summary(volmart)
+
+## Check if dependent variable, Volume1, is normally distributed using Shapiro Wilk Normality Test. 
+#The hypothesis of SW is that data is normally distributed. Running the test gives us a P value of 0.2507,hence the dependant variable is normal. 
+qqnorm(volmart$Volume.1,col="blue")
+shapiro.test(volmart$Volume.1)
+
+##Load the necessary libraries in R
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+library(caret)
+library(caTools)
+
+##Extract the 'year' from the 'Weekending' column into a new column Year. 
+class(volmart$Weekending)
+volmart$Weekending <- dmy(volmart$Weekending)
+class(volmart$Weekending)
+volmart$Year<-as.numeric(format(volmart$Weekending, "%Y"))
+head(volmart$Year)
+class(volmart$Year)
+
+#Plot the volume by year to show the y-o-y trend. The volume decreases in 2011 and marginally increases in 2012
+volmart%>% 
+  filter(Year,Volume.1)%>%
+  group_by (Year)%>% 
+  summarize(value = sum(Volume.1))%>%
+  ggplot(aes(x=Year,y=value))+geom_col(fill="blue")+geom_text(aes(label=value),color="white",vjust=1.6)+labs(title="Volume1 for 2010-2012", y="Volume.1", x="Year")
+
+## Understand the relationship of Price.1 with Volume.1 and look at its y-o-y trend
+#Check for the strength of the relationship of Volume1 with Price through correlation test. 
+#The value of cor test for Price1 is -0.53. P value is  0.0008599
+cor(volmart$Volume.1,volmart$Price.1)
+cor.test(volmart$Volume.1,volmart$Price.1)
+ggplot(volmart, aes(x=Price.1,y=Volume.1))+ geom_point(color="blue", alpha=0.8)+stat_smooth(method="loess", formula=y~x)
+#Show the trend of Price.1. The trend show y-o-y increase in Price.1
+volmart%>% 
+  filter(Year,Price.1) %>%
+  group_by(Year)%>%
+  summarize(value = mean(Price.1))%>%
+  ggplot(aes(x=Year, y=value))+ geom_col(fill="blue")+geom_text(aes(label=value),color="white",vjust=1.6)+labs(title="Average Price.1 for 2010-2012",y="Average Price.1", x="Year")
+#Plot the Price.1 and Volume.1 on the same graph
+ggplot(volmart,aes(x=Weekending))+geom_line(aes(y=Volume.1, color="Volume.1"))+geom_line(aes(y=Price.1, color="Price.1"))+ylim(0,100)+labs(title="Trend of Volume vs Price.1", x="Year",y="Price.1 and Volume.1")
+
+## Understand the relationship of Price.2 with Volume.1 and look at its y-o-y trend
+#Check for the strength of the relationship of Volume1 with Price.2 through correlation test. 
+#The value of cor test for Price1 is -0.47 . P value is 0.003279
+cor.test(volmart$Volume.1,volmart$Price.2)
+ggplot(volmart, aes(x=Price.2,y=Volume.1)) + geom_point(colour = "blue", alpha = 0.8) + 
+  theme(axis.title = element_text(size = 8.5))+stat_smooth(method="loess", formula= y~x)
+#Show the trend of Price.2. It increased by 2 units in 2011 and then reduced by 1 unit in 2012
+volmart%>% 
+  filter(Year,Price.2) %>%
+  group_by(Year)%>%
+  summarize(value = mean(Price.2))%>%
+  ggplot(aes(x=Year, y=value))+ geom_col(fill="blue")+geom_text(aes(label=value),color="white",vjust=1.6)+labs(title="Average Price.2 for 2010-2012",y="Average Price.2", x="Year")
+#Plot the Price.2 and Volume.1 on the same graph
+ggplot(volmart,aes(x=Weekending))+geom_line(aes(y=Volume.1, color="Volume.1"))+geom_line(aes(y=Price.2, color="Price.2"))+ylim(10,25)+labs(title="Trend of Volume.1 vs Price.2", x="Year",y="Price.2 and Volume.1")
+
+##Take the average of the two prices in the two markets and analyse its corelation on volume1
+volmart$averageprice<- ((volmart$Price.1+volmart$Price.2)/2)
+summary(volmart$averageprice)
+#Run the correlation test on the average price and volume.1. The p value is less than 5% indicating strong corelation.
+#The correlation value is -0.63.
+cor.test(volmart$Volume.1,volmart$averageprice)
+ggplot(volmart,aes(x=Weekending))+geom_line(aes(y=averageprice, color="averageprice"))+geom_line(aes(y=Volume.1,color="Volume,1"))+labs(title="Trend of Volume.1 vs. Average Price", x="Year", y="Average Price and Volume.1")
+ggplot(volmart,aes(averageprice,Volume.1)) + geom_point(colour = "blue", alpha = 0.8) +
+  theme(axis.title = element_text(size = 8.5))+stat_smooth(method="loess", formula= y~x)
+
+## Calculating sales/revenues for the company for the years 2010-2012 and look at the trend
+volmart$ValueSales.1<- (volmart$Volume.1 * volmart$Price.1)
+summary(volmart$ValueSales.1)
+volmart$Weekending[which.min(volmart$ValueSales.1)]
+volmart$Weekending[which.max(volmart$ValueSales.1)]
+#Show the y-o-y trend of the total sales for Market 1
+volmart%>% 
+  filter(Year,ValueSales.1) %>%
+  group_by(Year)%>%
+  summarize(value = sum(ValueSales.1))%>%
+  ggplot(aes(x=Year, y=value))+ geom_col(fill="blue")+geom_text(aes(label=value),color="white",vjust=1.6)+labs(title="Total sales for 2010-2012 for Market 1",y="Total Value Sales", x="Year")
+#Create a new variable Year 1 of the class Factor
+volmart$Year1<-volmart$Year
+volmart$Year1<-as.factor(volmart$Year1)
+ggplot(volmart,aes(x=Year1,y=ValueSales.1))+geom_boxplot()+labs(title="Distribution of ValueSales.1 y-o-y")
+
+##Study the competition prices in both markets,Comp.Price.1 and Competition.Price.2 
+summary(volmart$Comp.Price.1)
+summary(volmart$Competition.Price.2)
+#Correlation between the competition prices and Volume.1
+#The corrtest value of Volume1 with Comp Price 1 and CompPrice 2 respectively is 0.48 and -0.32.
+#Only for Comp Price1, the p value is significant. 
+cor.test(volmart$Volume.1,volmart$Comp.Price.1)
+cor.test(volmart$Volume.1,volmart$Competition.Price.2)
+ggplot(volmart,aes(x=Year1,y=Comp.Price.1))+geom_boxplot()+labs(title="Distribution of Competition Price 1 y-o-y")
+ggplot(volmart,aes(x=Weekending))+geom_line(aes(y=Price.1, color="Price.1"))+geom_line(aes(y=Comp.Price.1, color="Comp.Price.1"))+ ylim(75,100)+labs(title="Trend of Price.1 vs Comp Price.1", x="Year",y="Prices")
+
+#Add average competition price and look at its correlation with Volume.The p value is insignificant hence no correlation with volume1
+volmart$AverageComprice <- ((volmart$Comp.Price.1+volmart$Competition.Price.2)/2)
+summary(volmart$AverageComprice)
+cor.test(volmart$Volume.1,volmart$AverageComprice)
+
+##Study the distribution outlets and its correlation with Volume.1
+summary(volmart$Distribution.1)
+cor.test(volmart$Volume.1,volmart$Distribution.1)
+cor.test(volmart$Volume.1,volmart$Distribution.2)
+#For both distribution outlets, there is no correlation with volume with insignificant P values. 
+#The corrtest value is around 0.25 for both distribution.1 and distribution.2 with volume.1
+#Plot the distribution trend y-o-y and scatter plot of volume1 and distribution1
+ggplot(volmart, aes(x=Distribution.1, y= Volume.1))+geom_point(color="blue", alpha=0.8)+stat_smooth(method="loess", formula="y~x")
+volmart%>%
+  filter(Year, Distribution.1)%>%
+  group_by(Year)%>%
+  summarize(value=sum(Distribution.1))%>%
+  ggplot(aes(x=Year, y=value))+geom_col(fill="blue")+geom_text(aes(label=value),color="white",vjust=1.6)+labs(title="Distribution.1 trend",y="Number of outlets",x="Year")
+#Consider total distribution
+volmart$TotalDist <-(volmart$Distribution.1+volmart$Distribution.2)
+#Correlation test for volume1 and total distribution gives insignificant p values and corrtest value of 0.30
+cor.test(volmart$Volume.1,volmart$TotalDist)
+#Plot the total distribution trend y-o-y and scatter plot of volume1 and total distribution
+ggplot(volmart, aes(x=TotalDist, y= Volume.1))+geom_point(color="blue", alpha=0.8)+stat_smooth(method="loess", formula="y~x")
+volmart%>%
+  filter(Year, TotalDist)%>%
+  group_by(Year)%>%
+  summarize(value=sum(TotalDist))%>%
+  ggplot(aes(x=Year, y=value))+geom_col(fill="blue")+geom_text(aes(label=value),color="white",vjust=1.6)+labs(title="Total Distribution trend",y="Number of total outlets",x="Year")
+
+#Consider the Trade Promotions 3,4 and its correlation with Volume.1
+#The p value for Trade Prom 3 and Volume.1 is 0.188 and vor Trade Prom 4 is 0.459, indicating no significant correlation
+cor.test(volmart$Volume.1,volmart$Trade.Promotion.3)
+cor.test(volmart$Volume.1,volmart$Trade.Promotion.4)
+volmart$TradeProm34<- (volmart$Trade.Promotion.3+volmart$Trade.Promotion.4)
+cor.test(volmart$Volume.1,volmart$TradeProm34)
+#Plot the trend for combined trade promotion 3 and 4. It was consistent at 12.8 units for year 2010-11 and increased by 2 units to 14 in 2012
+volmart%>%
+  filter(Year, TradeProm34)%>%
+  group_by(Year)%>%
+  summarize(value=sum(TradeProm34))%>%
+  ggplot(aes(x=Year, y=value))+geom_col(fill="blue")+geom_text(aes(label=value),color="white",vjust=1.6)+labs(title="Total Trade Promotion34",y="Trade Promotion34",x="Year")
+
+##Consider the Trade Promotions 1,2 and its correlation with Volume.1. The p values for both is insignificant 
+cor.test(volmart$Volume.1,volmart$Trade.promotion.1)
+cor.test(volmart$Volume.1,volmart$Trade.promotion.2)
+volmart$TradeProm12 <- volmart$Trade.promotion.1+volmart$Trade.promotion.2
+#Show the trend of Trade Promotion 1 and 2
+volmart%>%
+  filter(Year, TradeProm12)%>%
+  group_by(Year)%>%
+  summarize(value=sum(TradeProm12))%>%
+  ggplot(aes(x=Year, y=value))+geom_col(fill="blue")+geom_text(aes(label=value),color="white",vjust=1.6)+labs(title="Total Trade Promotion12",y="Trade Promotion 12",x="Year")
+ggplot(volmart,aes(x=Weekending, y=TradeProm12))+geom_col(fill="blue")+geom_text(aes(label=TradeProm12),color="black",vjust=1.6)+labs(title="Total Trade Promotion12",y="Trade Promotion7",x="Year")
+
+##Consider the TV spends and its correlation with Volume.1
+volmart$TotalTV<- (volmart$TV.1+volmart$TV.2+volmart$TV.3+volmart$TV.4+volmart$TV.5)
+head(volmart$TotalTV)
+#The p value for correlation btw TV spends and volume is 1.6%, indicating it is significant at corrvalue of 0.4
+cor.test(volmart$Volume.1,volmart$TotalTV)
+#Plot the y-o-y trend of Tv spends. It was the highest in 2010 and then reduced considerably in 2011 and 2012
+volmart%>%
+  filter(Year, TotalTV)%>%
+  group_by(Year)%>%
+  summarize(value=sum(TotalTV))%>%
+  ggplot(aes(x=Year, y=value))+geom_col(fill="blue")+geom_text(aes(label=value),color="white",vjust=1.6)+labs(title="Total TV Spends",y="TV Spends",x="Year")
+ggplot(volmart,aes(x=Weekending))+geom_line(aes(y=TotalTV, color="TotalTV"))+geom_line(aes(y=Volume.1,color="Volume.1"))
+ggplot(volmart, aes(TotalTV,Volume.1)) + geom_point(colour = "blue", alpha = 0.8) +
+  theme(axis.title = element_text(size = 8.5))+stat_smooth(method="loess", formula=y~x)
+
+##Consider the magazine spends and its correlation with volume.1.Correlation is high at 0.42 with significant p value of 1.06%
+cor.test(volmart$Magazine.1,volmart$Volume.1)
+
+##COnsider the price discounts and its correlation with VOlume.1
+cor.test(volmart$Volume.1,volmart$Discount.1)
+cor.test(volmart$Volume.1,volmart$Price.Discount)
+#Both correlations are insignificant with p values greater than 5%
+volmart$avgdiscounts<- ((volmart$Discount.1+volmart$Price.Discount)/2)
+head(volmart$avgdiscounts)
+cor.test(volmart$Volume.1,volmart$avgdiscounts)
+ggplot(volmart,aes(x=Year1,y=avgdiscounts))+geom_boxplot()+labs(title="Distribution of Average Discounts y-o-y")
+
+##Consider the Instore Promotions and its correlation with VOlume1
+cor.test(volmart$Volume.1,volmart$Instore.Promotion)
+#p value come to 0.45 indicating insignificant correlation
+ggplot(volmart,aes(x=Weekending,y=Instore.Promotion))+geom_col()
+
+##Consider the OOH spends and its correlation with Volume1
+cor.test(volmart$Volume.1,volmart$OOH.1)
+#p value is insignificant at 0.67
+volmart%>%
+  filter(Year, OOH.1)%>%
+  group_by(Year)%>%
+  summarize(value=sum(OOH.1))%>%
+  ggplot(aes(x=Year, y=value))+geom_col(fill="blue")+geom_text(aes(label=value), color="white", vjust=1.6)+labs(title="OOH Spends y-o-y", x="Year", y= "OOH Spends")
+
+##Consider the Print spends and its correlation with Volume1
+#P value is significant at 0.02 but the corr value is -0.38 which intuitvely does not make sense
+cor.test(volmart$Volume.1,volmart$Print.1)
+ggplot(volmart,aes(x=Weekending,y=Print.1))+geom_col()
+
+##Modeling with Linear Regression. We will select a model with a more diverse set of variables, each having a significant p value and with a higher Adjusted R2.
+
+#Final Models: 
+modelA<-lm(Volume.1~Price.1+Distribution.1+Trade.promotion.1+Magazine.1+Discount.1+TV.3,data=volmart)
+summary(modelA)
+
+modelB<-lm(Volume.1~Price.1+Distribution.1+Trade.promotion.1+Magazine.1+Discount.1+TV.3+AverageComprice,data=volmart)
+summary(modelB)
+
+## Model A Validation
+#Predict volume1 with Mode lA 
+modelA <-lm(Volume.1~averageprice+Comp.Price.1+Distribution.1+Distribution.2+Trade.promotion.1+Magazine.1+avgdiscounts,data=volmart)
+volmart$predvolA<-fitted(modelA)
+#Calculate Residuals for modelA
+volmart$modelAresi<-residuals(modelA)
+
+#Check for MAPE. It comes to 3.9% for modelA
+library(MLmetrics)
+MAPE(volmart$predvolA,volmart$Volume.1)
+
+#Check for Multicollinearity. VIF less than 6 for all variables 
+library(car)
+vif(modelA)
+
+#Check for normality of errors. Results indicate it is normally distributed with p value of 0.147
+qqnorm(volmart$modelAresi, col="blue")
+qqline(volmart$modelAresi, col="red")
+shapiro.test(volmart$modelAresi)
+
+#Check for Homoscedasticity using BreuschPagan Test. Ho is constant variance assumption. Pvalue is 0.2718. WE accept the null hypothesis
+library(car)
+ncvTest(modelA)
+
+#Check for Autocorrelation using Durbin Watson Test. DW Stats is 1.67 indicating very slight  autocorrelation between errors
+library(car)
+durbinWatsonTest(modelA)
+
+##Model B Validation
+#Predict volume1 with Model B 
+modelB <- lm(Volume.1~Price.1+Distribution.1+Trade.promotion.1+Magazine.1+Discount.1+TV.3+AverageComprice,data=volmart)
+summary(modelB)
+volmart$predvolB<-fitted(modelB)
+
+#Calculate Residuals for modelB
+volmart$modelBresi<-residuals(modelB)
+
+#Check for MAPE. It comes to 3.7% for model B
+MAPE(volmart$predvolB,volmart$Volume.1)
+
+#Check for Multicollinearity. VIF less than 6 for all variables 
+library(car)
+vif(modelB)
+
+#Check for normality of errors. Results indicate it is not normally distributed with p value of 0.04314
+qqnorm(volmart$modelBresi, color="blue")
+qqline(volmart$modelBresi, col="red")
+shapiro.test(volmart$modelBresi)
+
+#Check for Homoscedasticity using BreuschPagan Test. Ho is constant variance assumption. Pvalue is 0.2438. WE accept the null hypothesis
+library(car)
+ncvTest(modelB)
+
+#Check for Autocorrelation using Durbin Watson Test. DW Stats is 1.16 indicating  autocorrelation between errors
+library(car)
+durbinWatsonTest(modelB)
+
+
+##Adding Dummy Variables to account for Auto Correlation
+##We add  dummy variables in the dataset for 2010-2012 Jan and 2010-2011 Dec
+volmart$month_Yr<-format(as.Date(volmart$Weekending), "%Y-%m")
+volmart$Jan <- ifelse(volmart$month_Yr == "2010-01" | volmart$month_Yr == "2011-01" | volmart$month_Yr == "2012-01", 1,0)
+volmart$Dec <- ifelse(volmart$month_Yr == "2010-12" | volmart$month_Yr == "2011-12", 1,0)
+
+#Running the models again using the above two variables
+
+modelAD <-lm(Volume.1~Price.1+Distribution.1+Trade.promotion.1+Magazine.1+Discount.1+TV.3+Jan+Dec,data=volmart)
+summary(modelAD)
+
+modelBD<-lm(Volume.1~Price.1+Distribution.1+Trade.promotion.1+Magazine.1+Discount.1+TV.3+AverageComprice+Jan+Dec,data=volmart)
+summary(modelBD)
+
+ 
+##We will go with model B as all the p values and sign are acceptable. 
+
+#Predicting the volumes and calculating the residuals
+
+volmart$predvolBD<-fitted(modelBD)
+
+volmart$modelBDresi<-residuals(modelBD) 
+
+# Running further tests
+
+#Check for normality of errors. Results indicate it is not normally distributed with p value of less than 5%
+shapiro.test(volmart$modelBDresi)
+
+#Check for Homoscedasticity using BreuschPagan Test. Ho is constant variance assumption. Pvalue is 0.85. We accept the null hypothesis
+ncvTest(modelBD)
+
+#Check for Autocorrelation using Durbin Watson Test. DW Stats is 1.26 
+durbinWatsonTest(modelBD)
+
+```
+
